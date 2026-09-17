@@ -26,7 +26,7 @@ docker pull ghcr.io/pavlofialkovskyi/devops-app2:latest
 # with NULL values, just for the sake of new table structure
 docker run --rm \
   --network devops-net \
-  -e DB_HOST=devops-app2-db.cf6ieyouu1lz.us-east-2.rds.amazonaws.com \  # got it from the endpoint checked folder in RDS 
+  -e DB_HOST=devops-app2-db.cf6ieyouu1lz.us-east-2.rds.amazonaws.com \
   -e DB_PORT=5432 \
   -e DB_NAME=devops_app2_db \
   -e DB_USER=app_user \
