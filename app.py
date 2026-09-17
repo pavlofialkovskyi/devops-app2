@@ -18,7 +18,7 @@ def get_db_connection():                   # FUNCTION — plain, standalone, not
 def get_messages():                        # FUNCTION — again, plain, standalone
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT id, content, created_at FROM messages ORDER BY id;")
+    cur.execute("SELECT id, image_url, content, created_at FROM messages ORDER BY id;")
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -28,14 +28,15 @@ def get_messages():                        # FUNCTION — again, plain, standalo
 def create_message():
     data = request.get_json()
     content = data.get("content")
+    image_url = data.get("image_url")
     if not content:
         return jsonify({"error": "content is required"}), 400
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
-        "INSERT INTO messages (content) VALUES (%s) RETURNING id, content, created_at;",
-        (content,),
+        "INSERT INTO messages (content, image_url) VALUES (%s, %s) RETURNING id, content, image_url, created_at;",
+        (content, image_url),
     )
     new_row = cur.fetchone()
     conn.commit()
@@ -47,14 +48,15 @@ def create_message():
 def update_message(message_id):
     data = request.get_json()
     content = data.get("content")
+    image_url = data.get("image_url")
     if not content:
         return jsonify({"error": "content is required"}), 400
 
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
-        "UPDATE messages SET content = %s WHERE id = %s RETURNING id, content, created_at;",
-        (content, message_id),
+        "UPDATE messages SET content = %s, image_url = %s WHERE id = %s RETURNING id, content, image_url, created_at;",
+        (content, image_url, message_id),
     )
     updated_row = cur.fetchone()
     conn.commit()
