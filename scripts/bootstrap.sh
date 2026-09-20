@@ -7,12 +7,17 @@ systemctl enable docker
 # isolate the containers in the network devops-net so that containers in it can have names (ids)
 docker network create devops-net
 
+# pulled the db_host ENDPOINT from the Parameter store because Bootstrap.sh file will be available in the repo
+# and used it in the DB_PASSWORD syntacs and two containers syntacs
+DB_HOST=$(aws ssm get-parameter --name "/devops-app2/db_host" --query "Parameter.Value" --output text --region us-east-2)
+
+
 # pull the db pass from the Parameter store in aws ssm
 DB_PASSWORD=$(aws ssm get-parameter --name "/devops-app2/db_password" --with-decryption --query "Parameter.Value" --output text --region us-east-2)
 
 # connect to the Postgres in RDS and check if there is a table there, if not - Create Table
-PGPASSWORD=$DB_PASSWORD psql -h devops-app2-db.cf6ieyouu1lz.us-east-2.rds.amazonaws.com -U app_user -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'devops_app2_db'" | grep -q 1 || \
-PGPASSWORD=$DB_PASSWORD psql -h devops-app2-db.cf6ieyouu1lz.us-east-2.rds.amazonaws.com -U app_user -d postgres -c "CREATE DATABASE devops_app2_db;"
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U app_user -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'devops_app2_db'" | grep -q 1 || \
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U app_user -d postgres -c "CREATE DATABASE devops_app2_db;"
 
 # pull the ghcr token from the parameter store in amazon ssm
 GHCR_TOKEN=$(aws ssm get-parameter --name "/devops-app2/ghcr_token" --with-decryption --query "Parameter.Value" --output text --region us-east-2)
@@ -26,7 +31,7 @@ docker pull ghcr.io/pavlofialkovskyi/devops-app2:latest
 # with NULL values, just for the sake of new table structure
 docker run --rm \
   --network devops-net \
-  -e DB_HOST=devops-app2-db.cf6ieyouu1lz.us-east-2.rds.amazonaws.com \
+  -e DB_HOST=$DB_HOST \
   -e DB_PORT=5432 \
   -e DB_NAME=devops_app2_db \
   -e DB_USER=app_user \
@@ -39,7 +44,7 @@ docker run -d \
   --name devops-app2 \
   --network devops-net \
   --restart unless-stopped \
-  -e DB_HOST=devops-app2-db.cf6ieyouu1lz.us-east-2.rds.amazonaws.com \
+  -e DB_HOST=$DB_HOST \
   -e DB_PORT=5432 \
   -e DB_NAME=devops_app2_db \
   -e DB_USER=app_user \
