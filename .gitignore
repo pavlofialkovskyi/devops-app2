@@ -219,6 +219,8 @@ __marimo__/
 
 
 # Terraform TF Vars Tokens etc
-terraform.tfwars
+terraform.tfvars
 *.tfwars
 .terraform/
+*.log.hcl
+crash.log
