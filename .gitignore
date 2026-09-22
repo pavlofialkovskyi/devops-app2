@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Terraform TF Vars Tokens etc
+terraform.tfwars
+*.tfwars
+.terraform/
