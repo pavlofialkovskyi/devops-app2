@@ -1,32 +1,102 @@
 resource "aws_vpc" "main" {
-  cidr_block = "10.0.0.0/16"
-
-  # aws_vpc is the network itself — 10.0.0.0/16 gives you 65,536 addresses to carve up
-  # standard-sized private range
-
+  cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
 
   tags = {
-    Name = "devops-app2-vpc"
+    Name = "devops-app-vpc"
   }
 }
 
+# ------------------------ PUBLIC ------------------------
+
 resource "aws_internet_gateway" "main" {
-
-  # aws_internet_gateway is what actually lets anything in this VPC reach (or be reached from) 
-  # the public internet — without it, this VPC would be totally isolated.
-
   vpc_id = aws_vpc.main.id
-
-  # we will use this id in security_groups.tf
 
   tags = {
     Name = "devops-app2-igw"
   }
 }
 
-# big architectural change -> I am adding 4x private subnets, a and b for EC2[app] and RDS[db]
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = {
+    Name = "devops-app2-public-rt"
+  }
+}
+
+resource "aws_subnet" "public_a" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block               = "10.0.1.0/24"
+  availability_zone        = "us-east-2a"
+  map_public_ip_on_launch  = true
+
+  tags = {
+    Name = "devops-app2-public-a"
+  }
+}
+
+resource "aws_subnet" "public_b" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block               = "10.0.2.0/24"
+  availability_zone        = "us-east-2b"
+  map_public_ip_on_launch  = true
+
+  tags = {
+    Name = "devops-app2-public-b"
+  }
+}
+
+resource "aws_route_table_association" "public_a" {
+  subnet_id      = aws_subnet.public_a.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "public_b" {
+  subnet_id      = aws_subnet.public_b.id
+  route_table_id = aws_route_table.public.id
+}
+
+# ------------------------ PRIVATE (NAT) that lives on public subnet A  --------
+
+# NAT is here for outbound-only traffic — EC2 pulling images from GHCR,
+# or RDS reaching AWS for patching. Neither can be reached FROM the internet.
+
+resource "aws_eip" "nat" {
+  domain = "vpc"
+
+  tags = {
+    Name = "devops-app2-nat-eip"
+  }
+}
+
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public_a.id
+
+  tags = {
+    Name = "devops-app2-nat"
+  }
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id
+  }
+
+  tags = {
+    Name = "devops-app2-private-rt"
+  }
+}
 
 resource "aws_subnet" "private_app_a" {
   vpc_id            = aws_vpc.main.id
@@ -68,28 +138,22 @@ resource "aws_subnet" "private_db_b" {
   }
 }
 
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
-  }
-
-  tags = {
-    Name = "devops-app2-public-rt"
-  }
+resource "aws_route_table_association" "private_app_a" {
+  subnet_id      = aws_subnet.private_app_a.id
+  route_table_id = aws_route_table.private.id
 }
 
-resource "aws_route_table_association" "public_a" {
-  subnet_id      = aws_subnet.public_a.id
-  route_table_id = aws_route_table.public.id
+resource "aws_route_table_association" "private_app_b" {
+  subnet_id      = aws_subnet.private_app_b.id
+  route_table_id = aws_route_table.private.id
 }
 
-resource "aws_route_table_association" "public_b" {
-  subnet_id      = aws_subnet.public_b.id
-  route_table_id = aws_route_table.public.id
+resource "aws_route_table_association" "private_db_a" {
+  subnet_id      = aws_subnet.private_db_a.id
+  route_table_id = aws_route_table.private.id
 }
 
-# The route table + two associations is what tells each subnet "any traffic not staying inside this VPC, 
-# send it out through the internet gateway" — subnets on their own don't know how to route anywhere without this.
+resource "aws_route_table_association" "private_db_b" {
+  subnet_id      = aws_subnet.private_db_b.id
+  route_table_id = aws_route_table.private.id
+}
