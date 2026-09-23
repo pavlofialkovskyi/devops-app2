@@ -45,19 +45,3 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "devops-app2-ec2-role"
   role = aws_iam_role.ec2_role.name
 }
-
-resource "random_password" "db_password" {
-  length  = 20
-  special = false
-}
-
-resource "aws_ssm_parameter" "db_password" {
-  name  = "/devops-app2/db_password"
-  type  = "SecureString"
-  value = random_password.db_password.result
-}
-
-resource "aws_db_instance" "main" {
-  # ...same as before...
-  password = random_password.db_password.result
-}
