@@ -26,30 +26,47 @@ resource "aws_internet_gateway" "main" {
   }
 }
 
-resource "aws_subnet" "public_a" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "us-east-2a"
-  map_public_ip_on_launch = true
+# big architectural change -> I am adding 4x private subnets, a and b for EC2[app] and RDS[db]
+
+resource "aws_subnet" "private_app_a" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.10.0/24"
+  availability_zone = "us-east-2a"
 
   tags = {
-    Name = "devops-app2-public-a"
+    Name = "devops-app2-private-app-a"
   }
 }
 
-resource "aws_subnet" "public_b" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.2.0/24"
-  availability_zone       = "us-east-2b"
-  map_public_ip_on_launch = true
+resource "aws_subnet" "private_app_b" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.11.0/24"
+  availability_zone = "us-east-2b"
 
   tags = {
-    Name = "devops-app2-public-b"
+    Name = "devops-app2-private-app-b"
   }
 }
 
-# Two subnets, one per AZ (us-east-2a/us-east-2b), matches your original "at least 2 AZs" requirement 
-# for the ASG and ALB
+resource "aws_subnet" "private_db_a" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.20.0/24"
+  availability_zone = "us-east-2a"
+
+  tags = {
+    Name = "devops-app2-private-db-a"
+  }
+}
+
+resource "aws_subnet" "private_db_b" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.21.0/24"
+  availability_zone = "us-east-2b"
+
+  tags = {
+    Name = "devops-app2-private-db-b"
+  }
+}
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
