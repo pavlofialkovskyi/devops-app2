@@ -14,3 +14,4 @@ Werkzeug==3.1.8
 alembic==1.20.0
 SQLAlchemy==2.0.54
 python-dotenv==1.1.0
+boto3==1.43.103
