@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   test:
@@ -25,6 +27,7 @@ jobs:
 
   build-and-push:
     needs: test
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -49,6 +52,7 @@ jobs:
 
   deploy:
     needs: build-and-push
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
