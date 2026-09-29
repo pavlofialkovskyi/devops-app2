@@ -224,3 +224,5 @@ terraform.tfvars
 .terraform/
 *.log.hcl
 crash.log
+terraform.tfstate
+terraform.tfstate.backup
