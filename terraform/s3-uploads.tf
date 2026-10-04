@@ -60,9 +60,9 @@ resource "aws_iam_role_policy" "uploads_access" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
-# EC2 role permission to upload/read/delete files in this bucket , only 3 actions, no more
+        Effect = "Allow"
+        Action = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+        # EC2 role permission to upload/read/delete files in this bucket , only 3 actions, no more
         Resource = "${aws_s3_bucket.uploads.arn}/*"
       }
     ]
