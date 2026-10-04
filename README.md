@@ -89,6 +89,9 @@ Infrastructure is fully provisioned via Terraform, with remote state stored in S
 - **IAM Role (GitHub Actions, OIDC)** — a separate role trusted via GitHub's OIDC identity provider, scoped to this exact repo and branch, with narrow permission to trigger an ASG instance refresh. No long-lived AWS credentials are stored in GitHub — each workflow run authenticates with a short-lived token issued at run time.
 - **SSM Parameter Store** — stores the DB password and GHCR pull token as SecureString parameters, fetched at boot time.
 - **Security Groups** — ALB SG (public 80/443) → EC2 SG (5000, source = ALB SG) → RDS SG (5432, source = EC2 SG).
+- **S3 (media bucket)** — private bucket for static site media (images/video), uploaded manually by developers via their own IAM credentials — no application code or EC2 role has write access to it. Fully blocked from public access (`BucketOwnerEnforced`, public access block enabled on all four settings), encrypted at rest (SSE-S3), and readable only through CloudFront via Origin Access Control (OAC) — the bucket policy scopes `s3:GetObject` to this one distribution's ARN, so direct S3 access is denied for everyone else.
+- **CloudFront (media)** — separate distribution fronting the media bucket, using the AWS managed `CachingOptimized` cache policy. Includes a CloudFront Function on `viewer-request` that blocks hotlinking by rejecting requests whose `Referer` header doesn't match our own domain (`fatcontract.com`).
+
 
 **Boot flow (`scripts/bootstrap.sh`):**
 
@@ -122,3 +125,4 @@ The deploy step only runs if the test and build steps both succeed. Direct pushe
 - [x] Automated CI/CD deploy via GitHub OIDC + ASG Instance Refresh
 - [x] S3-backed file attachments (GDPR-aware, presigned URLs)
 - [x] Terraform (Infrastructure as Code)
+- [x] S3-backed media bucket (CloudFront + OAC, hotlink protection)
