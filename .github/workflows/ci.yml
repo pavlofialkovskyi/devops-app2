@@ -47,7 +47,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:latest
+          tags: |
+                ghcr.io/${{ github.repository }}:latest
+                ghcr.io/${{ github.repository }}:${{ github.sha }}
 
 
   deploy:
@@ -68,4 +70,4 @@ jobs:
         run: |
           aws autoscaling start-instance-refresh \
             --auto-scaling-group-name devops-app2-asg \
-            --preferences '{"MinHealthyPercentage": 90, "InstanceWarmup": 60}'
+           --preferences '{"MinHealthyPercentage": 100, "MaxHealthyPercentage": 200,  "InstanceWarmup": 60}' 

@@ -19,6 +19,12 @@ resource "aws_launch_template" "app" {
 
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
 
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
   user_data = filebase64("${path.module}/../scripts/bootstrap.sh")
 
   tag_specifications {
