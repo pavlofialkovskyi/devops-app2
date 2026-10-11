@@ -1,6 +1,6 @@
 #!/bin/bash
 dnf update -y
-dnf install -y docker aws-cli postgresql15
+
 systemctl start docker
 systemctl enable docker
 
@@ -15,9 +15,6 @@ DB_HOST=$(aws ssm get-parameter --name "/devops-app2/db_host" --query "Parameter
 # pull the db pass from the Parameter store in aws ssm
 DB_PASSWORD=$(aws ssm get-parameter --name "/devops-app2/db_password" --with-decryption --query "Parameter.Value" --output text --region us-east-2)
 
-# connect to the Postgres in RDS and check if there is a table there, if not - Create Table
-PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U app_user -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'devops_app2_db'" | grep -q 1 || \
-PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U app_user -d postgres -c "CREATE DATABASE devops_app2_db;"
 
 # pull the ghcr token from the parameter store in amazon ssm
 GHCR_TOKEN=$(aws ssm get-parameter --name "/devops-app2/ghcr_token" --with-decryption --query "Parameter.Value" --output text --region us-east-2)

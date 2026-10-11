@@ -1,5 +1,21 @@
 # s3-uploads.tf
 
+# 38 CORS, a preflight to S3, browser asks our s3-upload bucket if requests from my domain fatcontract 
+# are allowed to this s3 bucket
+resource "aws_s3_bucket_cors_configuration" "uploads" {
+  bucket = aws_s3_bucket.uploads.id
+
+  cors_rule {
+    allowed_origins = ["https://fatcontract.com"]
+    allowed_methods = ["PUT", "GET"]
+    allowed_headers = ["*"]    # any request heaaders are allowed
+    expose_headers  = ["ETag"] # Frontend state tag
+    max_age_seconds = 3000
+
+  }
+}
+
+
 resource "aws_s3_bucket" "uploads" {
   bucket = "devops-app2-uploads-364077344467"
 
@@ -43,6 +59,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "uploads" {
   rule {
     id     = "expire-uploads"
     status = "Enabled"
+
+    filter {}
 
     expiration {
       days = 30
