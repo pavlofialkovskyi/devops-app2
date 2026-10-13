@@ -16,10 +16,21 @@ terraform {
   }
 }
 
+#42 we use this region for all of our aws resources and services
 provider "aws" {
   region = "us-east-2"
 }
 
+
+#42 We added this ALIAS now, is only used by resources 
+# that ask for it with provider = aws.us_east_1, which in your project is just the WAF.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+}
+
+
 provider "cloudflare" {
   api_token = var.cloudflare_api_token
 }
+
