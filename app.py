@@ -4,12 +4,23 @@ import uuid
 import psycopg2
 import boto3                                   
 #----- AWS SDK for Python — lets us talk to S3
-from botocore.config import Config
 #27----- dependensy for a s3 local emulator called minIO
-
-
+from botocore.config import Config
 from psycopg2.extras import RealDictCursor
-from flask import Flask, jsonify, request
+
+#4 adding password hasher library Argon2id
+from argon2 import PasswordHasher
+import psycopg2.errors
+ph = PasswordHasher()
+#6 JWT login libraries and dependencies
+import jwt
+from datetime import datetime, timedelta, timezone
+from argon2.exceptions import VerifyMismatchError
+JWT_SECRET = os.environ.get("JWT_SECRET")
+#7 Token check
+from flask import Flask, jsonify, request, g       #7 added new dependency g
+from functools import wraps
+
 
 ##----- OBJECT — one instance of the Flask class, named "app".
 app = Flask(__name__)    
@@ -44,8 +55,6 @@ s3_public = boto3.client(
 # "addressing_style": "path" - s required for MinIO to work correctly, 
 #  and it's harmless to leave on even against real AWS, withtout need of if/else condition
 
-
-
 def get_db_connection():                   
     return psycopg2.connect(
         host=os.environ.get("DB_HOST"),
@@ -54,6 +63,30 @@ def get_db_connection():
         user=os.environ.get("DB_USER"),
         password=os.environ.get("DB_PASSWORD"),
     )
+
+#7 -------------------- Protecting the Route, Token Check --------------------------------------
+
+def require_auth(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        header = request.headers.get("Authorization", "")
+        if not header.startswith("Bearer "):   # reads the Bearer in the header 
+            return jsonify({"error": "missing token"}), 401
+        token = header.split(" ", 1)[1]
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"]) 
+# check the signature with the secret in browser via jwt.decode()
+# It is very important to provision the algorithms=["HS256"] in PyJWT, this is a security rule
+
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "token expired"}), 401  # expired status error code => JS login
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "invalid token"}), 401  # invalid token status error code => JS login
+        g.user_id = int(payload["sub"])  # save the user_id in g.user_id
+        return f(*args, **kwargs)
+    return wrapper
+
+
 
 #------- Method to create a temporal url on any fetch action in chat---------
 
@@ -85,6 +118,7 @@ def with_download_url(row):
 # new name and the original name temporary"
 
 @app.route("/uploads/presign", methods=["POST"])   
+@require_auth # 7 now req authentication - checks JSON web token
 def presign_upload():
 #----- Step 1 of sending a file (separate from sending a text message, per the frontend's design: 
 # the file picker fires this immediately, on its own, never combined with the text-message Send button 
@@ -122,7 +156,8 @@ def presign_upload():
 
 #--------- Method to download file from chat, with_download_url generates a temporal 5 min link -------
 
-@app.route("/messages", methods=["GET"])   
+@app.route("/messages", methods=["GET"]) 
+@require_auth # 7 now req authentication - checks JSON web token  
 def get_messages():                        
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -132,9 +167,10 @@ def get_messages():
 # pagination is set to 50 
 
     cur.execute(
-    "SELECT id, content, media_key, original_filename, created_at FROM messages "
-    "ORDER BY id LIMIT %s OFFSET %s;",
-    (limit, offset),
+        "SELECT id, content, media_key, original_filename, created_at FROM messages "
+        "WHERE user_id = %s "  #7 list that only belongs to this authenticated user_id
+        "ORDER BY id LIMIT %s OFFSET %s;",
+        (g.user_id, limit, offset), # added g.user_id to the list
     )
 
     rows = cur.fetchall()
@@ -161,6 +197,7 @@ def get_messages():
 
 
 @app.route("/messages", methods=["POST"])
+@require_auth # 7 now req authentication - checks JSON web token
 def create_message():
 #----- Step 2 of sending a file (or the only step, for a plain text message): the frontend 
 # calls this AFTER a file has already been uploaded straight to S3 using the presigned URL 
@@ -180,14 +217,10 @@ def create_message():
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
-        "INSERT INTO messages (content, media_key, original_filename) VALUES (%s, %s, %s) "
-#----- RETURNING is Postgres SQL syntax, not a new column: it means "insert this row, 
-# then immediately hand back these column values from the row you just created" — in ONE trip 
-# to the database, instead of a separate SELECT query afterward to go look the new row back up.
-#----- The frontend needs this: it doesn't know the new row's real "id" or "created_at" until Postgres 
-# assigns them at insert time.
-        "RETURNING id, content, media_key, original_filename, created_at;",
-        (content, media_key, original_filename),
+        "INSERT INTO messages (content, media_key, original_filename,  user_id) "  #7 added new column  user_id
+        "VALUES (%s, %s, %s, %s) "  #7 1 more value %s for  user_id
+        "RETURNING id, content, media_key, original_filename, created_at;", #7 it is what is send back to Frontend, no user_id
+        (content, media_key, original_filename, g.user_id), # values for the slots, g.user_id
     )
     new_row = cur.fetchone()   
 # fetches the row RETURNING just handed back
@@ -210,6 +243,7 @@ def create_message():
 
 
 @app.route("/messages/<int:message_id>", methods=["PUT"])
+@require_auth # 7 now req authentication - checks JSON web token
 def update_message(message_id):
     data = request.get_json()
     content = data.get("content")
@@ -222,9 +256,10 @@ def update_message(message_id):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
-        "UPDATE messages SET content = %s, media_key = %s, original_filename = %s WHERE id = %s "
+        "UPDATE messages SET content = %s, media_key = %s, original_filename = %s "
+        "WHERE id = %s AND user_id = %s " #7 added new column  user_id
         "RETURNING id, content, media_key, original_filename, created_at;",
-        (content, media_key, original_filename, message_id),
+        (content, media_key, original_filename, message_id,  g.user_id), #7 values for the slots, g.user_id
     )
     updated_row = cur.fetchone()
     conn.commit()
@@ -237,12 +272,17 @@ def update_message(message_id):
 
 
 @app.route("/messages/<int:message_id>", methods=["DELETE"])
+@require_auth # 7 now req authentication - checks JSON web token
 def delete_message(message_id):
 #----- Deletes the whole message. If it had a file attached, that file is also deleted from S3 here, 
 # so nothing gets left behind (orphaned) in the bucket once its owning message no longer exists.
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT media_key FROM messages WHERE id = %s;", (message_id,))
+    cur.execute(
+        "SELECT media_key FROM messages " 
+        "WHERE id = %s AND user_id = %s;", #7 user_id
+        (message_id, g.user_id), #7 g.user_id 
+    )
     row = cur.fetchone()
 
     if row is None:
@@ -250,7 +290,10 @@ def delete_message(message_id):
         conn.close()
         return jsonify({"error": "message not found"}), 404
 
-    cur.execute("DELETE FROM messages WHERE id = %s;", (message_id,))
+    cur.execute(
+        "DELETE FROM messages WHERE id = %s AND user_id = %s;",  #7 user_id
+        (message_id, g.user_id), #7 g.user_id
+    )
     conn.commit()
     cur.close()
     conn.close()
@@ -261,7 +304,7 @@ def delete_message(message_id):
         except Exception as e:
             app.logger.error(f"Failed to delete s3 Media File {row[ 'media_key']}: {e}")
 
-      
+    return "", 204
 
 # just for fun I left this method under if condition, though no file uploaded to S3 
 # when the message is sent, but we had actually 2 DELETE methods and 2nd one was to delete 
@@ -270,8 +313,79 @@ def delete_message(message_id):
 # if CONDITION returns that there was actually a Media Key UUID file stored  in s3 -> we delete 
 # the file in s3 and the row in Postgres. This is great because no Storage Leak in s3 is happening.
 
-    return "", 204
 
+
+
+
+#----------- Adding /signup API call to the routes of web server -------------
+
+@app.route("/signup", methods=["POST"])
+def signup():
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip().lower() # upper and lower case equalizer in the email name-login .strip().lower()
+    password = data.get("password") or "" 
+
+    if not email or "@" not in email:
+        return jsonify({"error": "valid email is required"}), 400  # requirements for the email to have @
+    if len(password) < 8:
+        return jsonify({"error": "password must be at least 8 characters"}), 400 # requiremets if the pass is too short
+
+    password_hash = ph.hash(password) # turns the password into an Argon2id string such as $argon2id$v=19$m=65536.... 
+    #Only this string is saved; the password itself is never stored.
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cur.execute(
+            "INSERT INTO users (email, password_hash) VALUES (%s, %s) "  # INSERT is a command to DB like POST for Flask,
+    # which translates into Create a new row 
+    # Update in SQL is like PUT in Flask web server logic
+
+            "RETURNING id, email, created_at;",   # 201 code to Frontend to change status from optimistic to complete
+            (email, password_hash),
+        )
+        new_user = cur.fetchone()
+        conn.commit()
+    except psycopg2.errors.UniqueViolation:  # this email/login already exists, returns error 409
+        conn.rollback()
+        return jsonify({"error": "email already registered"}), 409
+    finally:   # close the DB connection
+        cur.close()
+        conn.close()
+
+    return jsonify(new_user), 201
+
+
+# 6 ------------------------ /login API Call, that uses JWT ---------------------------
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT id, password_hash FROM users WHERE email = %s;", (email,)) # finds the user login by INDEX, using a sorting method, to half the list and repeat halving, like do 20 iterations instead of 1million, 
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if user is None:
+        return jsonify({"error": "invalid email or password"}), 401
+    try:
+        ph.verify(user["password_hash"], password) # hashes the entered password during login and compares with the original
+    except VerifyMismatchError:  # a wrong password raises this error
+        return jsonify({"error": "invalid email or password"}), 401 # standard status for failed login
+
+    now = datetime.now(timezone.utc)
+    payload = {    # the payload = what goes inside the token
+        "sub": str(user["id"]),  # user ID, it requires to be a text
+        "iat": now, # when the Token was issued
+        "exp": now + timedelta(hours=1), # expiration time 1 hour
+    }
+    token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")  # signs the token with the secret
+    return jsonify({"access_token": token, "token_type": "Bearer", "expires_in": 3600})
 
 
 
