@@ -41,7 +41,11 @@ services:
       AWS_ACCESS_KEY_ID: local_dev_key
       AWS_SECRET_ACCESS_KEY: local_dev_secret
       S3_PUBLIC_ENDPOINT_URL: ${S3_PUBLIC_ENDPOINT_URL} 
-# both db and s3 are running not in LOCALHOST, but in Docker composer name network
+      JWT_SECRET: ${JWT_SECRET}
+# the values like JWT_SECRET etc are taken from a local .ENV file, 
+# cloud build will pull it from AWS Parameter store via bootstrap.sh
+
+
     ports:
       - "5000:5000"
     depends_on:
