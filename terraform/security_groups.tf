@@ -1,22 +1,25 @@
+data "aws_ec2_managed_prefix_list" "cloudfront" { # a list of Cloudfront IPs
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
 resource "aws_security_group" "alb_sg" {
   name        = "alb-sg"
   description = "Allows inbound requests from www via http and https"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+
+  # the HTTP block used to catch 80 port request from HTTP but now it is redirected anyways, 
+ 
+  # Before ALB was not protected and was accepting all the traffic from PUBLIC internet 0.0.0.0/0
+  # ALB now only accepts traffic from CloudFront adresses, because this gates are located all over the world,
+  # their IP list is in prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront.id
 
   ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "HTTPS from CloudFront only"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront.id] # list of Cloudfront IPs
   }
 
   egress {
