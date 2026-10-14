@@ -9,7 +9,7 @@ resource "aws_security_group" "alb_sg" {
 
 
   # the HTTP block used to catch 80 port request from HTTP but now it is redirected anyways, 
- 
+
   # Before ALB was not protected and was accepting all the traffic from PUBLIC internet 0.0.0.0/0
   # ALB now only accepts traffic from CloudFront adresses, because this gates are located all over the world,
   # their IP list is in prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront.id

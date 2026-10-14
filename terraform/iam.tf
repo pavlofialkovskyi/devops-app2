@@ -26,10 +26,13 @@ data "aws_iam_policy_document" "ssm_param_read" {
     effect  = "Allow"
     actions = ["ssm:GetParameter"]
 
+    # thse resources are provision to give it to WEB APP Container on creation, as I did locally in Docker-compose.yml
+    # for AWS they live in the Bootstrap.sh
     resources = [
-      "arn:aws:ssm:us-east-2:364077344467:parameter/devops-app2/db_password",
-      "arn:aws:ssm:us-east-2:364077344467:parameter/devops-app2/ghcr_token",
-      "arn:aws:ssm:us-east-2:364077344467:parameter/devops-app2/db_host",
+      "arn:aws:ssm:us-east-2:364077344467:parameter/devops-app2/db_password", # EC2 has a key to PostgresDB
+      "arn:aws:ssm:us-east-2:364077344467:parameter/devops-app2/ghcr_token",  # EC2 can download the private Image package
+      "arn:aws:ssm:us-east-2:364077344467:parameter/devops-app2/db_host",     # EC2 knows the name of the PostgresDB to talk to
+      "arn:aws:ssm:us-east-2:364077344467:parameter/devops-app2/jwt_secret",  # now EC2 flask web server has access > jwt_secret
     ]
   }
 }
