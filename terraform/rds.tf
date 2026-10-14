@@ -1,13 +1,3 @@
-resource "random_password" "db_password" {
-  length  = 20
-  special = false
-}
-
-resource "aws_ssm_parameter" "db_password" {
-  name  = "/devops-app2/db_password"
-  type  = "SecureString"
-  value = random_password.db_password.result
-}
 
 resource "aws_db_subnet_group" "main" {
   name       = "devops-app2-db-subnet-group"
